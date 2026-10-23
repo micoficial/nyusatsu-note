@@ -1,0 +1,67 @@
+name: build-and-deploy
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['data/summary.json', '**.md']
+  schedule:
+    - cron: '30 12 * * *' # 毎日 21:30（日本時間）：官公需ポータルは夕方19時ごろにその日の公告を載せる
+    - cron: '40 21 * * *' # 毎日 6:40（日本時間）：前日の残りを足し、「締切前／締切済み」を今日の日付で分け直す
+  workflow_dispatch:
+    inputs:
+      kkj_days:
+        description: '公告を何日さかのぼって取り直すか（空なら3日、日曜は30日）'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: 公開データを取得（前回までの控えを戻し、新しい分を足して、控えを差し替える）
+        run: node scripts/fetch.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RESTORE: '1'
+          UPLOAD: '1'
+          KKJ_DAYS: ${{ inputs.kkj_days }}
+      - name: サイトを作る
+        run: node scripts/build.mjs
+        env:
+          SITE_ORIGIN: https://micoficial.github.io
+          SITE_BASE: /nyusatsu-note/
+      - name: 更新の記録を残す
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/summary.json
+          git diff --cached --quiet || git commit -m "データ更新 $(date -u +%Y-%m-%d)"
+          git push || echo "記録のpushは省略"
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

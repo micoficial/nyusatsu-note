@@ -4,3 +4,5 @@ data/raw/
 data/store/
 .claude/
 *.log
+data/fetch-status.json
+data/tmp-*/

@@ -1,0 +1,12 @@
+{
+  "name": "nyusatsu-note",
+  "private": true,
+  "type": "module",
+  "description": "入札ノート：国・自治体の入札公告と国の機関の落札実績を、機関・地域・分野・会社ごとにまとめる静的サイト",
+  "scripts": {
+    "fetch": "node scripts/fetch.mjs",
+    "build": "node scripts/build.mjs",
+    "serve": "node scripts/serve.mjs"
+  },
+  "engines": { "node": ">=20" }
+}
