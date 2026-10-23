@@ -47,6 +47,102 @@ export function parseResults(xml) {
   return { error: null, hits, results };
 }
 
+// 応答を少しずつ読み、公告1件ずつ取り出す。公告文が長すぎる件（数十MBの仕様書が丸ごと入っていることがある）は、
+// 先頭だけ残して残りを読み捨てる。APIにはページ送りがないので、後ろの公告を取りこぼさないよう最後まで読む
+export class StreamParser {
+  constructor({ keepDesc = 200000 } = {}) {
+    this.keepDesc = keepDesc;
+    this.buf = '';
+    this.head = ''; // 公告の外側（SearchHits・Error）
+    this.records = [];
+    this.inRec = false;
+    this.skipping = false;
+    this.truncated = 0;
+  }
+
+  push(text) {
+    const OPEN = '<ProjectDescription>';
+    const CLOSE = '</ProjectDescription>';
+    const TAIL = 40; // タグが2回に分かれて届いても見つけられるよう、末尾は次に持ち越す
+    this.buf += text;
+    for (;;) {
+      if (this.skipping) {
+        const i = this.buf.indexOf(CLOSE);
+        if (i < 0) { this.buf = this.buf.slice(-TAIL); return; }
+        this.cur += CLOSE;
+        this.buf = this.buf.slice(i + CLOSE.length);
+        this.skipping = false;
+        this.descDone = true;
+        continue;
+      }
+      if (!this.inRec) {
+        const i = this.buf.indexOf('<SearchResult>');
+        if (i < 0) {
+          // 公告の外側（SearchHits など）は小さいので残しておく
+          if (this.head.length < 20000) this.head += this.buf.slice(0, Math.max(0, this.buf.length - TAIL));
+          this.buf = this.buf.slice(-TAIL);
+          return;
+        }
+        if (this.head.length < 20000) this.head += this.buf.slice(0, i);
+        this.buf = this.buf.slice(i);
+        this.inRec = true;
+        this.cur = '';
+        this.ds = -1;
+        this.descDone = false;
+      }
+      const end = this.buf.indexOf('</SearchResult>');
+      if (end >= 0) {
+        this.cur += this.buf.slice(0, end + '</SearchResult>'.length);
+        this.buf = this.buf.slice(end + '</SearchResult>'.length);
+        this.records.push(this.cur);
+        this.inRec = false;
+        this.cur = '';
+        continue;
+      }
+      // まだ1件が終わっていない。届いた分を cur に移し、公告文が長くなりすぎたら先頭だけ残して読み捨てに入る
+      if (this.buf.length > TAIL) {
+        this.cur += this.buf.slice(0, -TAIL);
+        this.buf = this.buf.slice(-TAIL);
+      }
+      if (!this.descDone) {
+        if (this.ds < 0) this.ds = this.cur.indexOf(OPEN);
+        if (this.ds >= 0) {
+          if (this.cur.indexOf(CLOSE, this.ds) >= 0) this.descDone = true;
+          else if (this.cur.length - this.ds > this.keepDesc + OPEN.length) {
+            this.cur = this.cur.slice(0, this.ds + OPEN.length + this.keepDesc).replace(/&[#\w]*$/, '');
+            this.skipping = true;
+            this.truncated++;
+            continue;
+          }
+        }
+      }
+      return;
+    }
+  }
+
+  // 途中で読むのをやめたとき、読みかけの1件（公告文の先頭まで）を閉じて残す。その件名を返す
+  closePartial() {
+    if (!this.inRec) return null;
+    let rec = this.cur + (this.skipping ? '' : this.buf);
+    if (rec.includes('<ProjectDescription>') && !rec.includes('</ProjectDescription>')) rec = `${rec.replace(/&[#\w]*$/, '')}</ProjectDescription>`;
+    rec += '</SearchResult>';
+    this.records.push(rec);
+    this.inRec = false;
+    this.skipping = false;
+    this.buf = '';
+    return (rec.match(/<ProjectName>([^<]*)<\/ProjectName>/) || [])[1] || '';
+  }
+
+  // 読み終えたら、ふつうの応答と同じ形のXMLにして返す
+  xml() {
+    const outside = this.head + (this.inRec ? '' : this.buf);
+    const err = outside.match(/<Error>[^<]*<\/Error>/);
+    if (err) return `<Results>${err[0]}</Results>`;
+    const hits = (outside.match(/<SearchHits>\d+<\/SearchHits>/) || [''])[0];
+    return `<?xml version="1.0" encoding="utf-8" ?>\n<Results>\n<Version>1.0</Version>\n<SearchResults>\n${hits}\n${this.records.map((r) => `${r}\n`).join('')}</SearchResults>\n</Results>\n`;
+  }
+}
+
 // ---- 文字の正規化 ----
 const z2h = (s) => s
   .replace(/[０-９Ａ-Ｚａ-ｚ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))

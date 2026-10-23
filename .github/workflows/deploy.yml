@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       kkj_days:
-        description: '公告を何日さかのぼって取り直すか（空なら3日、日曜は30日）'
+        description: '公告を何日さかのぼって取り直すか（空なら3日、日曜は14日）'
         required: false
         default: ''
 

@@ -2,7 +2,7 @@
 //   調達ポータル：落札実績オープンデータ（年度ごとの全件ZIP＋日ごとの差分ZIP）→ data/raw/pportal/
 //   官公需情報ポータルサイト：検索APIで公告日ごとに取得 → data/store/kkj/YYYY-MM.json（月ごとに貯める）
 // 使い方:
-//   node scripts/fetch.mjs                  … 調達ポータル＋公告の直近3日（日曜は30日）
+//   node scripts/fetch.mjs                  … 調達ポータル＋公告の直近3日（日曜は14日。公告日から2週間たってポータルに載るものもある）
 //   KKJ_DAYS=95 node scripts/fetch.mjs      … 公告を95日さかのぼって取る（初回）
 //   KKJ_FROM=2026-07-01 KKJ_TO=2026-07-31 node scripts/fetch.mjs
 //   SKIP_PPORTAL=1 / SKIP_KKJ=1             … 片方だけ
@@ -12,7 +12,7 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { parseResults, toRecord } from './lib/kkj.mjs';
+import { parseResults, toRecord, StreamParser } from './lib/kkj.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const RAW_PP = path.join(ROOT, 'data', 'raw', 'pportal');
@@ -111,32 +111,105 @@ async function fetchPportal() {
 const KKJ_API = 'https://www.kkj.go.jp/api/';
 const ALL_PREFS = Array.from({ length: 47 }, (_, i) => String(i + 1).padStart(2, '0'));
 const GROUPS = [ALL_PREFS.slice(0, 7), ALL_PREFS.slice(7, 14), ALL_PREFS.slice(14, 23), ALL_PREFS.slice(23, 30), ALL_PREFS.slice(30, 39), ALL_PREFS.slice(39)];
+// 応答を少しずつ読む。長すぎる公告文は StreamParser が先頭だけ残す。idle の間なにも届かなければやめる。
+// 公告文の欄に図面データなどが丸ごと入った件があり、応答が数百MBになることがある。maxBytes を超えたら読むのをやめ、
+// 読みかけの1件の件名を giant として返す（呼び出し側でその件名を除いて取り直す）
+async function getKkjStream(url, { idle = 90e3, total = 1200e3, retries = 1, maxBytes = 25e6 } = {}) {
+  let lastErr;
+  for (let i = 0; i <= retries; i++) {
+    const ctrl = new AbortController();
+    let timer = setTimeout(() => ctrl.abort(new Error(`${idle / 1000}秒なにも届きませんでした`)), idle);
+    const stop = setTimeout(() => ctrl.abort(new Error(`${total / 1000}秒たっても終わりませんでした`)), total);
+    try {
+      const res = await fetch(url, { headers: { 'User-Agent': UA }, signal: ctrl.signal });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const parser = new StreamParser();
+      const dec = new TextDecoder('utf-8');
+      let bytes = 0;
+      let giant = null;
+      for await (const chunk of res.body) {
+        clearTimeout(timer);
+        timer = setTimeout(() => ctrl.abort(new Error(`${idle / 1000}秒なにも届きませんでした`)), idle);
+        bytes += chunk.length;
+        parser.push(dec.decode(chunk, { stream: true }));
+        if (bytes > maxBytes) {
+          if (!parser.skipping) throw new Error(`応答が${(maxBytes / 1e6).toFixed(0)}MBを超えました`);
+          giant = parser.closePartial();
+          break; // ループを抜けると受信は止まる（ここで abort すると、抜けるときに失敗扱いになる）
+        }
+      }
+      if (giant == null) parser.push(dec.decode());
+      if (parser.truncated) log(`  長い公告文 ${parser.truncated}件を先頭だけ残しました（${giant != null ? `${(maxBytes / 1e6).toFixed(0)}MBで打ち切り：${giant}` : `応答 ${(bytes / 1e6).toFixed(0)}MB`}）`);
+      return { xml: parser.xml(), giant };
+    } catch (e) {
+      lastErr = ctrl.signal.aborted && ctrl.signal.reason ? ctrl.signal.reason : e;
+      if (i < retries) await sleep(15e3 * (i + 1));
+    } finally {
+      clearTimeout(timer);
+      clearTimeout(stop);
+    }
+  }
+  throw new Error(`${url} を取得できませんでした: ${lastErr?.message}`);
+}
+
 let lastCall = 0;
 // tag：保存名の区別（all＝全都道府県、g1〜g6＝都道府県のまとまり、p13＝東京都など）
-async function kkj(params, tag, { timeout = 120e3, retries = 1 } = {}) {
+// 戻り値の giant は、応答が大きすぎて途中で読むのをやめたときの、読みかけの件の件名（なければ null）
+async function kkj(params, tag, { retries = 1 } = {}) {
   const raw = path.join(RAW_KKJ, `${params.CFT_Issue_Date.replace('/', '_')}_${tag}.xml.gz`);
-  if (env.REUSE_RAW && fs.existsSync(raw)) return parseResults(zlib.gunzipSync(fs.readFileSync(raw)).toString('utf8'));
+  if (env.REUSE_RAW && fs.existsSync(raw)) {
+    const xml = zlib.gunzipSync(fs.readFileSync(raw)).toString('utf8');
+    return { ...parseResults(xml), giant: (xml.match(/<!-- giant: ([\s\S]*?) -->/) || [])[1] ?? null };
+  }
   const wait = 4000 - (Date.now() - lastCall); // 続けて大量に送らない（利用規約）
   if (wait > 0) await sleep(wait);
   lastCall = Date.now();
-  const xml = await get(`${KKJ_API}?${new URLSearchParams({ ...params, Count: '1000' })}`, { timeout, retries });
+  const { xml, giant } = await getKkjStream(`${KKJ_API}?${new URLSearchParams({ ...params, Count: '1000' })}`, { retries });
   lastCall = Date.now();
   const r = parseResults(xml);
   if (r.error) throw new Error(`官公需ポータルAPIのエラー: ${r.error}（${JSON.stringify(params)}）`);
   if (env.KEEP_RAW) {
     fs.mkdirSync(RAW_KKJ, { recursive: true });
-    fs.writeFileSync(raw, zlib.gzipSync(xml));
+    fs.writeFileSync(raw, zlib.gzipSync(giant != null ? `${xml}<!-- giant: ${giant.replace(/--/g, '')} -->\n` : xml));
   }
-  return r;
+  return { ...r, giant };
 }
 
-// 公告日1日ぶん（または期間）を取る。1000件を超えたとき、または応答がないときは都道府県で分けて取り直す
+// 件名から、除外の検索に使う語（かな・漢字が4文字以上続くところでいちばん長いもの）
+function giantTerm(title) {
+  const runs = String(title).normalize('NFKC').match(/[぀-ヿ一-鿿々]{4,}/g) || [];
+  return runs.sort((a, b) => b.length - a.length)[0] || '';
+}
+
+// 1つの都道府県・1日ぶん。大きすぎる件で打ち切ったときは、その件名の語を除いて取り直し、後ろの公告を拾う
+async function fetchKkjPref(range, p) {
+  const r = await kkj({ LG_Code: p, CFT_Issue_Date: range }, `p${p}`, { retries: 1 });
+  if (r.hits > 1000) log(`注意：${range} の都道府県${p}は${r.hits}件あり、1000件までしか取れませんでした`);
+  if (r.giant == null) return r;
+  const byKey = new Map(r.results.map((x) => [x.key, x]));
+  const terms = [];
+  let giant = r.giant;
+  for (let i = 0; i < 3 && giant != null; i++) {
+    const t = giantTerm(giant);
+    if (!t || terms.includes(t)) break;
+    terms.push(t);
+    const q = terms.map((x, j) => (j === 0 ? `NOT ${x}` : `ANDNOT ${x}`)).join(' ');
+    const r2 = await kkj({ LG_Code: p, CFT_Issue_Date: range, Project_Name: q }, `p${p}x${i + 1}`, { retries: 1 });
+    for (const x of r2.results) if (!byKey.has(x.key)) byKey.set(x.key, x);
+    giant = r2.giant;
+  }
+  const got = byKey.size;
+  if (got < r.hits) log(`  ${range} の都道府県${p}：${r.hits}件のうち${got}件を取得（大きすぎる公告文があり、残りは取れませんでした）`);
+  return { hits: r.hits, results: [...byKey.values()], giant: null };
+}
+
+// 公告日1日ぶん（または期間）を取る。1000件を超えたとき、応答がないとき、大きすぎて打ち切ったときは都道府県で分けて取り直す
 async function fetchKkjRange(range) {
   const failed = [];
   try {
-    // 大きな公告文が入っている日は応答が遅い。まとめての取得は1回だけ試し、だめなら分ける
-    const first = await kkj({ LG_Code: ALL_PREFS.join(','), CFT_Issue_Date: range }, 'all', { timeout: 150e3, retries: 0 });
-    if (first.hits <= 1000) return { hits: first.hits, results: first.results, failed };
+    const first = await kkj({ LG_Code: ALL_PREFS.join(','), CFT_Issue_Date: range }, 'all', { retries: 0 });
+    if (first.hits <= 1000 && first.giant == null) return { hits: first.hits, results: first.results, failed };
+    if (first.giant != null) log(`${range}：大きすぎる公告文（${first.giant}）があったので、都道府県で分けて取ります`);
   } catch (e) {
     log(`${range} をまとめて取れなかったので、都道府県で分けて取ります（${e.message}）`);
   }
@@ -144,15 +217,14 @@ async function fetchKkjRange(range) {
   let hits = 0;
   for (const [gi, g] of GROUPS.entries()) {
     try {
-      const r = await kkj({ LG_Code: g.join(','), CFT_Issue_Date: range }, `g${gi + 1}`, { timeout: 120e3, retries: 0 });
-      if (r.hits <= 1000) { out.push(...r.results); hits += r.hits; continue; }
+      const r = await kkj({ LG_Code: g.join(','), CFT_Issue_Date: range }, `g${gi + 1}`, { retries: 0 });
+      if (r.hits <= 1000 && r.giant == null) { out.push(...r.results); hits += r.hits; continue; }
     } catch (e) {
       log(`${range} の都道府県${g[0]}〜${g[g.length - 1]}を取れなかったので、1つずつ取ります（${e.message}）`);
     }
     for (const p of g) {
       try {
-        const r2 = await kkj({ LG_Code: p, CFT_Issue_Date: range }, `p${p}`, { timeout: 180e3, retries: 2 });
-        if (r2.hits > 1000) log(`注意：${range} の都道府県${p}は${r2.hits}件あり、1000件までしか取れませんでした`);
+        const r2 = await fetchKkjPref(range, p);
         out.push(...r2.results);
         hits += r2.hits;
       } catch (e) {
@@ -180,7 +252,9 @@ async function fetchKkj() {
   if (env.KKJ_FROM) {
     for (let d = env.KKJ_FROM; d <= (env.KKJ_TO || today); d = addDays(d, 1)) dates.push(d);
   } else {
-    const days = +(env.KKJ_DAYS || (new Date(`${today}T00:00:00Z`).getUTCDay() === 0 ? 30 : 3));
+    // 日曜の夜（日本時間）だけ、2週間さかのぼって取り直す
+    const jst = new Date(Date.now() + 9 * 3600e3);
+    const days = +(env.KKJ_DAYS || (jst.getUTCDay() === 0 && jst.getUTCHours() >= 12 ? 14 : 3));
     for (let i = 0; i < days; i++) dates.push(addDays(today, -i));
   }
   dates.sort().reverse();

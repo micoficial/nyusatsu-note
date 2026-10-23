@@ -18,7 +18,7 @@
 ## 動かし方
 
 ```bash
-node scripts/fetch.mjs                 # 調達ポータル＋公告の直近3日（日曜は30日）を data/ に取る
+node scripts/fetch.mjs                 # 調達ポータル＋公告の直近3日（日曜は14日）を data/ に取る
 KKJ_DAYS=95 node scripts/fetch.mjs     # 公告を95日さかのぼって取る（初回）
 node scripts/build.mjs                 # dist/ にサイトを作る（1分ほど）
 node scripts/serve.mjs                 # http://localhost:4177/nyusatsu-note/ で確認
