@@ -121,8 +121,12 @@ export function pager(basePath, page, pages) {
 const WEEK = ['日', '月', '火', '水', '木', '金', '土'];
 const wd = (d) => WEEK[new Date(`${d}T00:00:00Z`).getUTCDay()];
 
+// 「入札公告の取りやめに関する公告」などは、締切前の一覧に入れない
+const CANCEL = /(入札|公告|調達|手続き?|執行|公募)の?(取りやめ|取止め|取り止め|中止|取り消し|取消し?)|(取りやめ|取り止め|中止|取消し?)(について|のお知らせ|に関する|します|しました)/;
+
 // 締切の状態。today は 'YYYY-MM-DD'（日本時間）
 export function noticeStatus(n, today) {
+  if (CANCEL.test(n.t)) return { open: false, days: null, label: '取りやめ・中止', cls: 'st-closed' };
   if (n.dl) {
     const days = Math.round((Date.parse(n.dl) - Date.parse(today)) / 864e5);
     if (days >= 0) return { open: true, days, label: days === 0 ? '今日まで' : `あと${days}日`, cls: days <= 3 ? 'st-soon' : 'st-open' };

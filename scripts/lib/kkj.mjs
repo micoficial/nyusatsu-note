@@ -206,6 +206,7 @@ export function extractDeadline(desc, issue) {
     const seg = s.slice(segStart, d.i);
     let kind = null;
     let kwPos = -1;
+    let kwEnd = -1;
     if (prev && prev.kind && d.i - prev.end <= 8 && /^[\s()（）曜日月火水木金土祭午前後時分\d:~\-から至より]*$/.test(s.slice(prev.end, d.i))) {
       kind = prev.kind; // 「〇月〇日から〇月〇日まで」の後ろの日付
       kwPos = prev.kwPos;
@@ -214,9 +215,11 @@ export function extractDeadline(desc, issue) {
       const b = lastHit(OPENING, seg);
       const x = lastHit(EXCLUDE, seg);
       const inc = b.end > a.end ? b : a;
-      if (inc.end >= 0 && inc.end > x.end) {
+      // 「。」をまたぐ語は前の文のものなので使わない
+      if (inc.end >= 0 && inc.end > x.end && !seg.slice(inc.end).includes('。')) {
         kind = b.end > a.end ? 'open' : 'deadline';
         kwPos = segStart + inc.start;
+        kwEnd = segStart + inc.end;
       }
     }
     const t = Date.parse(`${d.v}T00:00:00Z`);
@@ -224,6 +227,8 @@ export function extractDeadline(desc, issue) {
     d.kwPos = kwPos;
     prev = d;
     if (!kind || !(t >= lo && t <= hi)) continue;
+    // 公告から2か月半より先の日付は、語のすぐ後ろ（25文字以内）にあるときだけ使う（履行期限などを拾わない）
+    if (t > +base + 75 * 864e5 && kwEnd >= 0 && d.i - kwEnd > 25) continue;
     if (!best || d.v > best.v) {
       const from = Math.max(kwPos >= 0 ? kwPos : d.i - 16, d.i - 30);
       best = { v: d.v, kind, snippet: s.slice(from, d.end).replace(/^[\s、。:)]+/, '').trim() };
