@@ -39,6 +39,9 @@ ${noticeList(fresh, ctx, { showPref: true })}
 <section class="sec"><h2>都道府県から探す</h2>
 <ul class="grid">${PREFS.map((p) => `<li><a href="${href(prefPath(p))}">${p.short}<small>${comma(ctx.byPrefOpen.get(p.code).length)}</small></a></li>`).join('')}</ul>
 <p class="note">数字は締切前の公告の件数。${CATEGORIES.map((c) => `<a href="${href(catPath(c))}">${c.key}の入札情報</a>`).join('・')}も見られます。</p></section>
+<section class="sec"><h2>国の新着の落札結果</h2>
+${awardTable(ctx.awards.slice(0, 10), { show: 'winner', companyLink: ctx.companyLink })}
+<p class="more"><a href="${href('rakusatsu/')}">新着の落札結果をもっと見る →</a></p></section>
 <section class="sec"><h2>${fyLabel(ctx.lastFullFy)}に国から落札した額が多い会社</h2>
 ${companyRank(rankRows(fyList, 10))}
 <p class="more"><a href="${href(rankPath(ctx.lastFullFy))}">${fyLabel(ctx.lastFullFy)}のランキングをもっと見る →</a>　<a href="${href(rankPath())}">ほかの年度・件数のランキング</a></p></section>
@@ -107,6 +110,23 @@ ${awardTable(t.awards.slice(0, 100), { show: 'winner', companyLink: ctx.companyL
     title: `${t.name}の入札情報・落札実績（国・自治体）｜${SITE_NAME}`,
     description: `${t.name}の入札公告（締切前${comma(open.length)}件）と、国の${t.name}の落札実績${comma(t.awards.length)}件。落札の多い会社、最近の落札者と落札額を無料で。`,
     path: topicPath(t),
+    body,
+    ld: [bc.ld],
+  });
+}
+
+export function renderLatestAwards(ctx) {
+  const bc = breadcrumbs([['トップ', ''], ['国の新着の落札結果', null]]);
+  const list = ctx.awards.slice(0, 500);
+  const body = `${bc.html}
+<header class="ph"><h1>国の新着の落札結果</h1>
+<p class="lead">国の機関（府省など）の入札で落札が決まった案件を、落札日の新しい順に500件並べています。調達ポータルの落札実績オープンデータ（${jpDate(ctx.ppInfo.latestDate)}まで）から作っています。府省ごとの一覧は<a href="${href('fusho/')}">府省の落札結果</a>から見られます。</p></header>
+${awardTable(list, { show: 'winner', companyLink: ctx.companyLink })}
+<p class="note">「案件番号」を<a href="https://www.p-portal.go.jp/pps-web-biz/UAA01/OAA0101" rel="noopener">調達ポータルの調達情報検索</a>に入れると、公告や落札者等の公示を確認できます。売払いは国が物を売ったもの、単価は単価契約で単価が記録されたものです。</p>`;
+  return layout({
+    title: `国の新着の落札結果（落札者・落札額）｜${SITE_NAME}`,
+    description: `国の機関の入札の落札結果を毎日更新。落札日・件名・府省・落札者・落札額の新着500件を無料で。`,
+    path: 'rakusatsu/',
     body,
     ld: [bc.ld],
   });

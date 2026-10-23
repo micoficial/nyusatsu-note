@@ -87,7 +87,7 @@ ${graph}
 <input class="sb-i" name="q" type="search" placeholder="会社名・機関名で検索" autocomplete="off" aria-label="会社名・機関名で検索" enterkeyhint="search">
 <div class="sb-r" hidden></div>
 </form>
-<nav class="nv" aria-label="メニュー"><a href="${href('koukoku/')}">新着公告</a><a href="${href('shimekiri/')}">締切間近</a><a href="${href('fusho/')}">落札結果</a><a href="${href('ranking/')}">ランキング</a><a href="${href('about/')}">使い方</a></nav>
+<nav class="nv" aria-label="メニュー"><a href="${href('koukoku/')}">新着公告</a><a href="${href('shimekiri/')}">締切間近</a><a href="${href('rakusatsu/')}">落札結果</a><a href="${href('ranking/')}">ランキング</a><a href="${href('about/')}">使い方</a></nav>
 </div>
 </header>
 <main class="wrap">
@@ -97,7 +97,7 @@ ${body}
 <div class="wrap">
 <p class="ft-src">${sourceLine()}</p>
 <p>入札に参加するときは、必ず発注機関の元の公告・入札説明書で、締切・資格・日時をご確認ください。このサイトの締切日は公告文から自動で読み取った目安です。</p>
-<nav class="ft-nv"><a href="${href('')}">トップ</a><a href="${href('koukoku/')}">新着の公告</a><a href="${href('ken/')}">都道府県から探す</a><a href="${href('bunya/')}">分野から探す</a><a href="${href('fusho/')}">府省の落札結果</a><a href="${href('ranking/')}">落札額ランキング</a><a href="${href('about/')}">このサイトについて</a><a href="${href('about/#privacy')}">プライバシー</a></nav>
+<nav class="ft-nv"><a href="${href('')}">トップ</a><a href="${href('koukoku/')}">新着の公告</a><a href="${href('ken/')}">都道府県から探す</a><a href="${href('bunya/')}">分野から探す</a><a href="${href('rakusatsu/')}">国の新着の落札結果</a><a href="${href('fusho/')}">府省の落札結果</a><a href="${href('ranking/')}">落札額ランキング</a><a href="${href('kikan/')}">機関から探す</a><a href="${href('about/')}">このサイトについて</a><a href="${href('about/#privacy')}">プライバシー</a></nav>
 <p class="ft-c">© ${new Date().getFullYear()} ${OPERATOR}　｜　データ更新：${esc(BUILD.built)}</p>
 </div>
 </footer>
@@ -137,7 +137,9 @@ export function noticeList(list, ctx, { showOrg = true, showPref = false } = {})
   if (!list.length) return '<p class="note">該当する公告はありません。</p>';
   return `<ul class="nl">${list.map((n) => {
     const st = noticeStatus(n, ctx.today);
-    const u = safeUrl(n.u);
+    // 日本語や空白を含むURLもあるので、そのときは符号化してから確かめる
+    const raw = String(n.u || '').trim();
+    const u = safeUrl(/[^\x21-\x7e]/.test(raw) ? encodeURI(raw) : raw);
     const ft = n.ft && /^(pdf|docx?|xlsx?|zip)$/i.test(n.ft) ? `<span class="ft-b">${esc(n.ft.toUpperCase())}</span>` : '';
     const org = ctx.orgOf(n);
     const meta = [
@@ -148,7 +150,8 @@ export function noticeList(list, ctx, { showOrg = true, showPref = false } = {})
       `公告 ${mdDate(n.d)}`,
     ].filter(Boolean).join('<i>・</i>');
     const snip = n.ds ? `<small class="nl-s">公告文より「${esc(n.ds)}」</small>` : '';
-    return `<li><span class="st ${st.cls}">${st.label}</span><a class="nl-t" href="${esc(u)}" target="_blank" rel="noopener">${esc(n.t)}</a>${ft}<span class="nl-m">${meta}</span>${snip}</li>`;
+    const title = u ? `<a class="nl-t" href="${esc(u)}" target="_blank" rel="noopener">${esc(n.t)}</a>${ft}` : `<span class="nl-t">${esc(n.t)}</span>`;
+    return `<li><span class="st ${st.cls}">${st.label}</span>${title}<span class="nl-m">${meta}</span>${snip}</li>`;
   }).join('')}</ul>`;
 }
 

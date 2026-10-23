@@ -16,7 +16,9 @@ import { renderAgencyIndex, renderAgency, renderAgencyYear } from './pages/agenc
 import {
   renderNoticesTop, renderDate, renderShimekiri, renderPrefIndex, renderPref, renderPrefCat, renderOrg, renderCat, renderOrgIndex,
 } from './pages/notices.mjs';
-import { renderTop, renderTopicIndex, renderTopic, renderRankingIndex, renderRanking, renderSearch, render404, renderAbout } from './pages/hubs.mjs';
+import {
+  renderTop, renderTopicIndex, renderTopic, renderRankingIndex, renderRanking, renderSearch, render404, renderAbout, renderLatestAwards,
+} from './pages/hubs.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = path.join(ROOT, 'dist');
@@ -249,6 +251,7 @@ write('bunya/', renderTopicIndex(ctx));
 for (const t of topicAgg.values()) write(topicPath(t), renderTopic(ctx, t));
 
 // 府省
+write('rakusatsu/', renderLatestAwards(ctx));
 write('fusho/', renderAgencyIndex(ctx));
 const PER_AGENCY_YEAR = 500;
 for (const ag of agencies.values()) {

@@ -91,6 +91,8 @@ ${shareButtons(url, `${c.name}の国の落札実績（${comma(c.c)}件）`)}
 <section class="sec"><h2>府省ごとの落札</h2>
 <div class="tw"><table class="dt"><thead><tr><th>府省</th><th>件数</th><th>落札額の合計</th></tr></thead><tbody>${ags}</tbody></table></div>
 ${tps ? `<p class="sub">件名から見た分野</p><div class="chips">${tps}</div>` : ''}</section>
+${c.c > 5 ? `<section class="sec"><h2>落札額が大きい案件</h2>
+${awardTable(c.awards.filter((a) => !a.k).slice().sort((a, b) => b.y - a.y).slice(0, 5), { show: 'agency' })}</section>` : ''}
 <section class="sec" id="list"><h2>${c.split ? `最近の落札（新しい順に${comma(rows.length)}件）` : `落札した案件（${comma(rows.length)}件）`}</h2>
 ${c.split ? `<p class="note">全${comma(c.c)}件は年度ごとのページで見られます：${[...f.fys].reverse().map((y) => `<a href="${href(companyPath(c.n, y))}">${fyLabel(y)}</a>`).join('・')}</p>` : ''}
 ${awardTable(rows, { show: 'agency' })}
