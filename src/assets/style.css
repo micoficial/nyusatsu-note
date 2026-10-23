@@ -131,6 +131,9 @@ main { padding: 18px 0 40px; }
 .dt thead th { font-size: .78rem; color: var(--muted); font-weight: 600; background: var(--soft); }
 .dt td { text-align: right; white-space: nowrap; }
 .dt th small { display: block; font-size: .72rem; font-weight: 400; }
+.dt td.l { text-align: left; white-space: normal; }
+.dt td.l small { display: block; font-size: .72rem; }
+code { font-size: .85em; background: var(--soft); padding: 1px 5px; border-radius: 4px; word-break: break-all; }
 .dt tbody th { font-weight: 600; }
 .at th, .at td { border-bottom: 1px solid var(--line); padding: 8px 6px; vertical-align: top; text-align: left; }
 .at thead th { font-size: .78rem; color: var(--muted); font-weight: 600; background: var(--soft); white-space: nowrap; }

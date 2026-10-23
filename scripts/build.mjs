@@ -17,7 +17,7 @@ import {
   renderNoticesTop, renderDate, renderShimekiri, renderPrefIndex, renderPref, renderPrefCat, renderOrg, renderCat, renderOrgIndex,
 } from './pages/notices.mjs';
 import {
-  renderTop, renderTopicIndex, renderTopic, renderRankingIndex, renderRanking, renderSearch, render404, renderAbout, renderLatestAwards,
+  renderTop, renderTopicIndex, renderTopic, renderRankingIndex, renderRanking, renderSearch, render404, renderAbout, renderLatestAwards, renderOpendataGuide,
 } from './pages/hubs.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -229,6 +229,7 @@ const ctx = {
 
 write('', renderTop(ctx));
 write('about/', renderAbout(ctx));
+write('about/opendata/', renderOpendataGuide(ctx));
 write('search/', renderSearch(ctx), 'hubs', false);
 write('404.html', render404(ctx), 'hubs', false);
 

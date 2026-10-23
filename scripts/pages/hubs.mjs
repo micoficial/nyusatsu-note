@@ -115,6 +115,74 @@ ${awardTable(t.awards.slice(0, 100), { show: 'winner', companyLink: ctx.companyL
   });
 }
 
+// 「落札実績オープンデータ 見方」への答え：列の意味と、公開されていない府省等コードの対応表
+export function renderOpendataGuide(ctx) {
+  const bc = breadcrumbs([['トップ', ''], ['このサイトについて', 'about/'], ['落札実績オープンデータの見方', null]]);
+  const ag = new Map();
+  const me = new Map();
+  for (const a of ctx.awards) {
+    ag.set(a.a, (ag.get(a.a) || 0) + 1);
+    let m = me.get(a.m);
+    if (!m) me.set(a.m, (m = { c: 0, prices: [], sougou: 0, uri: 0 }));
+    m.c++;
+    m.prices.push(a.y);
+    if (/総合評価/.test(a.t)) m.sougou++;
+    if (/売払|売却/.test(a.t)) m.uri++;
+  }
+  const median = (l) => { const s = l.slice().sort((x, y) => x - y); return s[s.length >> 1] || 0; };
+  const agRows = [...ctx.agencies.values()].filter((a) => ag.get(a.code)).sort((a, b) => a.code.localeCompare(b.code))
+    .map((a) => `<tr><th>${esc(a.code)}</th><td class="l"><a href="${href(agencyPath(a))}">${esc(a.name)}</a>${a.note ? `<small>${esc(a.note)}</small>` : ''}</td><td>${comma(ag.get(a.code))}件</td></tr>`).join('');
+  const meRows = [...me.entries()].sort((a, b) => b[1].c - a[1].c).map(([code, m]) => {
+    const note = code === '8002020' ? '売払い（国が物を売ったもの）と判断。件名の多くに「売払」「売却」がある'
+      : code === '8002050' ? '単価が記録されたものと判断（例：マスク数千万枚の購入が数百円）'
+        : m.sougou / m.c >= 0.05 ? `件名に「総合評価」を含むものが${Math.round((100 * m.sougou) / m.c)}%`
+          : '意味は公開されていない';
+    return `<tr><th>${esc(code)}</th><td>${comma(m.c)}件</td><td>${yenShort(median(m.prices))}</td><td class="l">${esc(note)}</td></tr>`;
+  }).join('');
+  const body = `${bc.html}
+<header class="ph"><h1>調達ポータルの落札実績オープンデータの見方</h1>
+<p class="lead">デジタル庁の<a href="${SOURCES.pportal.data}" rel="noopener">調達ポータル</a>では、国の機関の落札実績をCSV（年度ごとの全件データと、日ごとの差分データ）で配っています。見出しの行がなく、府省や方式はコードだけなので、そのままでは読みにくいデータです。${SITE_NAME}がこのデータを読むときに使っている、列の意味とコードの対応をまとめました。</p></header>
+<section class="card"><h2>ファイルの形</h2>
+<ul class="ul">
+<li>全件データ：<code>successful_bid_record_info_all_年度.zip</code>（前月末までの分。月に1回更新）。2013年度から年度ごとにあります</li>
+<li>差分データ：<code>successful_bid_record_info_diff_年月日.zip</code>（その日に新しく載った分。過去2か月ぶん）</li>
+<li>中身はCSV（UTF-8・BOM付き）が1つ。すべての値が「"」で囲まれ、見出しの行はありません。1行が「1件の落札×1社」で、複数の会社が落札した単価契約などは同じ調達案件番号で複数行になります</li>
+</ul></section>
+<section class="card"><h2>列の意味（左から）</h2>
+<div class="tw"><table class="dt dt-l"><thead><tr><th>列</th><th>中身</th><th>例</th></tr></thead><tbody>
+<tr><th>1</th><td class="l">調達案件番号</td><td class="l">0000000000000607523</td></tr>
+<tr><th>2</th><td class="l">件名</td><td class="l">令和７年度〇〇業務</td></tr>
+<tr><th>3</th><td class="l">落札決定日</td><td class="l">2026-10-22</td></tr>
+<tr><th>4</th><td class="l">落札価格（円）</td><td class="l">220000000.00</td></tr>
+<tr><th>5</th><td class="l">府省等のコード（下の表）</td><td class="l">W1</td></tr>
+<tr><th>6</th><td class="l">方式のコード（下の表）</td><td class="l">8002040</td></tr>
+<tr><th>7</th><td class="l">落札者の名前</td><td class="l">〇〇株式会社</td></tr>
+<tr><th>8</th><td class="l">落札者の法人番号（個人事業主などは空）</td><td class="l">7010401001556</td></tr>
+</tbody></table></div>
+<p class="note">列の名前は、中身から当サイトが判断したものです。調達案件番号は、先頭の0を省いて<a href="https://www.p-portal.go.jp/pps-web-biz/UAA01/OAA0101" rel="noopener">調達情報検索</a>に入れると、その案件の公告などを探せます。</p></section>
+<section class="card"><h2>府省等のコード（5列目）</h2>
+<p>コードの表は公開されていないため、各コードの件名（「宮内庁病院」「札幌管区気象台」など）から当サイトが判断しました。件数は${fyLabel(ctx.fys[ctx.fys.length - 1])}から${jpDate(ctx.ppInfo.latestDate)}までの合計です。</p>
+<div class="tw"><table class="dt dt-l"><thead><tr><th>コード</th><th>府省など</th><th>件数</th></tr></thead><tbody>${agRows}</tbody></table></div></section>
+<section class="card"><h2>方式のコード（6列目）</h2>
+<p>こちらも表は公開されていません。件数・落札価格の中央値と、件名から読み取れる傾向です。${SITE_NAME}では、売払いと単価のコードを落札額の合計から外しています。</p>
+<div class="tw"><table class="dt dt-l"><thead><tr><th>コード</th><th>件数</th><th>落札価格の中央値</th><th>見立て</th></tr></thead><tbody>${meRows}</tbody></table></div></section>
+<section class="card"><h2>読むときの注意</h2>
+<ul class="ul">
+<li>落札価格は小数点以下2桁まで入っています（多くは .00）。単価契約では単価が入っていることがあります</li>
+<li>件名が「テスト」「ダミーデータ」の試験用の記録が数十件あります</li>
+<li>法人番号が同じでも、社名が変わると落札者の名前が変わります。会社ごとに数えるときは法人番号でまとめると確実です</li>
+<li>このデータは国の機関（政府電子調達システム）の分だけです。自治体や独立行政法人の落札は入っていません</li>
+</ul>
+<p>${SITE_NAME}では、このデータを会社ごと（<a href="${href(rankPath())}">ランキング</a>）・府省ごと（<a href="${href('fusho/')}">府省の落札結果</a>）・分野ごと（<a href="${href('bunya/')}">分野から探す</a>）にまとめて見られます。</p></section>`;
+  return layout({
+    title: `落札実績オープンデータの見方（列の意味・府省コード表）｜${SITE_NAME}`,
+    description: '調達ポータルの落札実績オープンデータ（CSV）の見方。8つの列の意味、府省等のコード（A1〜W1）と方式のコードの対応表、読むときの注意。',
+    path: 'about/opendata/',
+    body,
+    ld: [bc.ld],
+  });
+}
+
 export function renderLatestAwards(ctx) {
   const bc = breadcrumbs([['トップ', ''], ['国の新着の落札結果', null]]);
   const list = ctx.awards.slice(0, 500);
@@ -212,7 +280,7 @@ export function renderAbout(ctx) {
 <section class="card"><h2>使っているデータ</h2>
 <ul class="ul">
 <li><b>入札公告</b>：<a href="${SOURCES.kkj.url}" rel="noopener">${SOURCES.kkj.name}</a>（${SOURCES.kkj.org}）の検索APIを利用して、公告日ごとに取得しています。国の機関・独立行政法人・都道府県・市区町村などが自分のサイトに載せた公告を、同ポータルが集めたものです（すべての公告ではありません）。いま${jpDate(k.first)}〜${jpDate(k.last)}の公告${comma(ctx.notices.length)}件を載せています。</li>
-<li><b>落札実績</b>：<a href="${SOURCES.pportal.data}" rel="noopener">${SOURCES.pportal.name}</a>（${SOURCES.pportal.org}）の「落札実績オープンデータ」（全件データ・差分データ）。国の機関が政府電子調達システム（GEPS）で行った入札などの落札で、${fyLabel(ctx.fys[ctx.fys.length - 1])}から${jpDate(ctx.ppInfo.latestDate)}までの${comma(ctx.awards.length)}件です。自治体・独立行政法人の落札は含みません。</li>
+<li><b>落札実績</b>：<a href="${SOURCES.pportal.data}" rel="noopener">${SOURCES.pportal.name}</a>（${SOURCES.pportal.org}）の「落札実績オープンデータ」（全件データ・差分データ）。国の機関が政府電子調達システム（GEPS）で行った入札などの落札で、${fyLabel(ctx.fys[ctx.fys.length - 1])}から${jpDate(ctx.ppInfo.latestDate)}までの${comma(ctx.awards.length)}件です。自治体・独立行政法人の落札は含みません。CSVの列の意味とコードの対応は<a href="${href('about/opendata/')}">落札実績オープンデータの見方</a>にまとめています。</li>
 </ul>
 <p>調達ポータルのコンテンツは政府標準利用規約（第2.0版）に準拠し、出典を書けば商用を含めて自由に使えます（CC BY 4.0互換）。官公需情報ポータルサイトの検索APIは、同サイトの利用規約にしたがい、APIを使っていることを明記し、同サイトへのリンクを設けて利用しています。${SITE_NAME}は、これらのデータを${OPERATOR}が加工して作成しています。国（中小企業庁・デジタル庁）が作成したものではありません。</p>
 <p>データは毎日自動で更新しています（最終更新：${esc(info.built)}）。</p></section>
