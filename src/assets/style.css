@@ -214,11 +214,23 @@ main { padding: 18px 0 40px; }
 .ft-nv { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 10px 0; }
 .ft-c { margin-top: 8px; }
 
+/* スマホでは落札の表を1件ずつの縦並びにする（落札額が隠れないように） */
+@media (max-width: 600px) {
+  .at thead { display: none; }
+  .at, .at tbody, .at td { display: block; }
+  .at tr { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "t t" "w w" "d y"; gap: 2px 8px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+  .at td { border: 0; padding: 0; min-width: 0 !important; }
+  .at td:nth-child(1) { grid-area: d; align-self: end; }
+  .at td:nth-child(2) { grid-area: t; font-weight: 600; }
+  .at td:nth-child(2) small { font-weight: 400; }
+  .at td:nth-child(3) { grid-area: w; }
+  .at td:nth-child(4) { grid-area: y; font-weight: 700; }
+  .at td:nth-child(4) small { display: inline; margin-left: 4px; }
+  .tw:has(.at) { overflow-x: visible; }
+}
 @media (max-width: 520px) {
   .card { padding: 14px 14px 10px; }
   .dl div { grid-template-columns: 6em 1fr; }
   .rt, .at { font-size: .86rem; }
   .rt-n { width: 2.2em; }
-  .at td:nth-child(2) { min-width: 11em; }
-  .at td:nth-child(3) { min-width: 6em; }
 }
