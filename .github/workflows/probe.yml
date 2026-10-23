@@ -1,0 +1,15 @@
+name: probe
+on:
+  workflow_dispatch:
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 国のサイトに届くか確かめる
+        run: |
+          for u in "https://www.kkj.go.jp/api/?LG_Code=13&CFT_Issue_Date=2026-10-21&Count=1" \
+                   "https://api.p-portal.go.jp/pps-web-biz/UAB03/OAB0301?fileversion=v001&filename=successful_bid_record_info_all_2013.zip" \
+                   "https://www.p-portal.go.jp/pps-web-biz/UAB02/OAB0201"; do
+            echo "$u -> $(curl -sS -o /tmp/out -w '%{http_code} %{size_download}' --max-time 60 "$u" || echo fail)"
+            head -c 300 /tmp/out; echo
+          done
