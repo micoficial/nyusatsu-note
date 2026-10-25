@@ -75,17 +75,18 @@ ${nav}`;
 export function renderShimekiri(ctx) {
   const bc = breadcrumbs([['トップ', ''], ['締切が近い入札公告', null]]);
   const until = ctx.addDays(ctx.today, 2);
-  const list = ctx.open.filter((n) => n.dl && n.dl <= until).sort(byDeadline);
+  const all = ctx.open.filter((n) => n.dl && n.dl <= until).sort(byDeadline);
+  const list = all.slice(0, 400); // 1ページを軽くする（残りは都道府県・機関のページにある）
   const groups = new Map();
   for (const n of list) { if (!groups.has(n.dl)) groups.set(n.dl, []); groups.get(n.dl).push(n); }
   const week = ctx.open.filter((n) => n.dl && n.dl <= ctx.addDays(ctx.today, 7)).length;
   const body = `${bc.html}
 <header class="ph"><h1>締切が近い入札公告</h1>
-<p class="lead">公告文から読み取った締切・開札の日付が、今日（${jpDate(ctx.today, { weekday: true })}）から3日以内の入札公告です（${comma(list.length)}件）。7日以内では${comma(week)}件あります。地域ごとの一覧は<a href="${href('ken/')}">都道府県のページ</a>から見られます。</p></header>
+<p class="lead">公告文から読み取った締切・開札の日付が、今日（${jpDate(ctx.today, { weekday: true })}）から3日以内の入札公告です（${comma(all.length)}件${all.length > list.length ? `。締切の近い順に${comma(list.length)}件を載せています` : ''}）。7日以内では${comma(week)}件あります。地域ごとの一覧は<a href="${href('ken/')}">都道府県のページ</a>から見られます。</p></header>
 ${KKJ_NOTE}
 ${[...groups.keys()].map((d) => `<section class="sec"><h2>${jpDate(d, { year: false, weekday: true })}（${comma(groups.get(d).length)}件）</h2>${noticeList(groups.get(d), ctx, { showPref: true })}</section>`).join('\n')}`;
   return layout({
-    title: `締切が近い入札公告（3日以内・${comma(list.length)}件）｜${SITE_NAME}`,
+    title: `締切が近い入札公告（3日以内・${comma(all.length)}件）｜${SITE_NAME}`,
     description: `締切・開札が近い国・自治体の入札公告を毎日更新。締切日ごとに、発注機関・分類・元の公告へのリンクつきで一覧にしています。`,
     path: 'shimekiri/',
     body,

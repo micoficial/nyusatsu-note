@@ -279,7 +279,7 @@ export function renderAbout(ctx) {
 <p class="lead">${SITE_NAME}は、国・自治体の入札公告と、国の機関の落札実績を、だれでも無料で、機関・地域・分野・会社ごとに見られるようにしたサイトです。</p></header>
 <section class="card"><h2>使っているデータ</h2>
 <ul class="ul">
-<li><b>入札公告</b>：<a href="${SOURCES.kkj.url}" rel="noopener">${SOURCES.kkj.name}</a>（${SOURCES.kkj.org}）の検索APIを利用して、公告日ごとに取得しています。国の機関・独立行政法人・都道府県・市区町村などが自分のサイトに載せた公告を、同ポータルが集めたものです（すべての公告ではありません）。いま${jpDate(k.first)}〜${jpDate(k.last)}の公告${comma(ctx.notices.length)}件を載せています。</li>
+<li><b>入札公告</b>：<a href="${SOURCES.kkj.url}" rel="noopener">${SOURCES.kkj.name}</a>（${SOURCES.kkj.org}）の検索APIを利用して、公告日ごとに取得しています。国の機関・独立行政法人・都道府県・市区町村などが自分のサイトに載せた公告を、同ポータルが集めたものです（すべての公告ではありません。たとえば東京都・横浜市・名古屋市・神戸市・福岡市など、自前の電子入札システムだけで公告している自治体の分はほとんど入っていません）。いま${jpDate(k.first)}〜${jpDate(k.last)}の公告${comma(ctx.notices.length)}件を載せています。</li>
 <li><b>落札実績</b>：<a href="${SOURCES.pportal.data}" rel="noopener">${SOURCES.pportal.name}</a>（${SOURCES.pportal.org}）の「落札実績オープンデータ」（全件データ・差分データ）。国の機関が政府電子調達システム（GEPS）で行った入札などの落札で、${fyLabel(ctx.fys[ctx.fys.length - 1])}から${jpDate(ctx.ppInfo.latestDate)}までの${comma(ctx.awards.length)}件です。自治体・独立行政法人の落札は含みません。CSVの列の意味とコードの対応は<a href="${href('about/opendata/')}">落札実績オープンデータの見方</a>にまとめています。</li>
 </ul>
 <p>調達ポータルのコンテンツは政府標準利用規約（第2.0版）に準拠し、出典を書けば商用を含めて自由に使えます（CC BY 4.0互換）。官公需情報ポータルサイトの検索APIは、同サイトの利用規約にしたがい、APIを使っていることを明記し、同サイトへのリンクを設けて利用しています。${SITE_NAME}は、これらのデータを${OPERATOR}が加工して作成しています。国（中小企業庁・デジタル庁）が作成したものではありません。</p>
