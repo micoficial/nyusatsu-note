@@ -1,20 +1,20 @@
 {
-  "built": "2026年11月23日",
+  "built": "2026年11月24日",
   "base": "/nyusatsu-note/",
   "pages": 26499,
-  "bytes": 482276550,
+  "bytes": 482059494,
   "awards": 316930,
   "companies": 23005,
   "awardsLatest": "2026-11-20",
   "pportalAllUpdated": "2026-11-23",
-  "notices": 34428,
-  "openNotices": 7301,
+  "notices": 34434,
+  "openNotices": 7304,
   "orgs": 1493,
-  "noticesLatest": "2026-11-22",
+  "noticesLatest": "2026-11-24",
   "kkjFetch": {
     "days": 3,
-    "total": 13,
-    "added": 0,
+    "total": 14,
+    "added": 6,
     "updated": 0,
     "failed": []
   }
